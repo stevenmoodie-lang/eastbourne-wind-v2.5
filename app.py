@@ -8,35 +8,31 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS FOR MOBILE & TITLE ---
+# --- CSS FOR UI ---
 st.markdown("""
     <style>
-        /* Container padding to center the content vertically */
+        /* Standardize padding for mobile */
         .block-container { 
-            padding-top: 2rem !important; 
+            padding-top: 1.5rem !important; 
             padding-bottom: 0rem;
             padding-left: 0.2rem !important;
             padding-right: 0.2rem !important;
         }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
         
-        /* New Title Styling (No overlapping) */
-        .title-container {
+        /* Clean Title Styling */
+        .custom-title {
             text-align: center;
-            padding-bottom: 1.5rem; /* Gap between title and graph */
-            width: 100%;
-        }
-        .main-title {
             font-size: 1.6rem;
             font-weight: 700;
             color: #ffffff;
-            margin: 0;
+            margin-bottom: 1rem;
         }
     </style>
-    <div class="title-container">
-        <div class="main-title">Eastbourne Wind</div>
-    </div>
 """, unsafe_allow_html=True)
+
+# --- TITLE ---
+st.markdown('<div class="custom-title">Eastbourne Wind</div>', unsafe_allow_html=True)
 
 # --- SETTINGS ---
 LAT, LON = -41.291, 174.894 
@@ -64,8 +60,16 @@ def get_eastbourne_data():
         "timezone": "Pacific/Auckland", "wind_speed_unit": "kn", "forecast_days": 7
     }
     r = requests.get(url, params=params).json()
-    df = pd.DataFrame({"time": pd.to_datetime(r["hourly"]["time"]), "speed": r["hourly"]["wind_speed_10m"], "dir": r["hourly"]["wind_direction_10m"]})
-    sun = pd.DataFrame({"date": pd.to_datetime(r["daily"]["time"]).date, "sunrise": pd.to_datetime(r["daily"]["sunrise"]), "sunset": pd.to_datetime(r["daily"]["sunset"])})
+    df = pd.DataFrame({
+        "time": pd.to_datetime(r["hourly"]["time"]), 
+        "speed": r["hourly"]["wind_speed_10m"], 
+        "dir": r["hourly"]["wind_direction_10m"]
+    })
+    sun = pd.DataFrame({
+        "date": pd.to_datetime(r["daily"]["time"]).date, 
+        "sunrise": pd.to_datetime(r["daily"]["sunrise"]), 
+        "sunset": pd.to_datetime(r["daily"]["sunset"])
+    })
     return df, sun
 
 try:
@@ -105,7 +109,7 @@ try:
 
         heading = (s['dir'] + 180) % 360
         
-        # Tiny Arrows
+        # Tiny Arrows (Size 11)
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
@@ -113,7 +117,7 @@ try:
             font=dict(size=11, color="white") 
         )
 
-        # Tiny Knots
+        # Tiny Knots (Size 9)
         fig.add_annotation(
             x=s['x_id'], y=-0.3, 
             text=f"<b>{round(s['speed'])}</b>",
@@ -121,6 +125,7 @@ try:
             font=dict(size=9, color="white"),
         )
 
+    # Date Labels at Top
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
