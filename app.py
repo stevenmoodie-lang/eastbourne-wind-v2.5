@@ -19,22 +19,27 @@ st.markdown("""
 LAT, LON = -41.291, 174.894  # Eastbourne Beach
 
 def get_color(knots):
-    if knots < 5: return "rgba(173, 216, 230, 1.0)"    # lightblue
-    if knots <= 10: return "rgba(30, 144, 255, 1.0)"  # dodgerblue
-    if knots <= 15: return "rgba(0, 128, 0, 1.0)"      # green
-    if knots <= 19: return "rgba(255, 200, 50, 1.0)"   # amber
-    if knots <= 28: return "rgba(255, 0, 0, 1.0)"      # red
-    return "rgba(139, 0, 0, 1.0)"                      # darkred
+    if knots <= 6: return "rgba(173, 216, 230, 1.0)"    # Light Blue
+    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   # Lighter Blue (LightSkyBlue)
+    if knots <= 15: return "rgba(0, 128, 0, 1.0)"       # Green
+    if knots <= 19: return "rgba(255, 200, 50, 1.0)"    # Amber
+    if knots <= 28: return "rgba(255, 0, 0, 1.0)"       # Red
+    return "rgba(139, 0, 0, 1.0)"                       # Dark Red
 
 def get_arrow_y(deg):
     """
-    Position based on where the wind is FROM.
-    Northerly (from N) -> Top
-    Southerly (from S) -> Bottom
+    Arrow positioning logic.
+    Middle is strictly reserved for winds within 15 degrees of East (90) or West (270).
+    Everything else is categorized as North (Top) or South (Bottom).
     """
-    if (deg >= 337.5) or (deg < 22.5): return 0.8  # Northerly
-    if (157.5 <= deg < 202.5): return 0.2          # Southerly
-    return 0.5                                      # Other (Middle)
+    # Middle range for East (75 to 105) and West (255 to 285)
+    if (75 < deg < 105) or (255 < deg < 285):
+        return 0.5
+    # If it's on the southern half of the compass
+    if (105 <= deg <= 255):
+        return 0.2
+    # Otherwise it's Northern half
+    return 0.8
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -47,14 +52,12 @@ def get_eastbourne_data():
     }
     r = requests.get(url, params=params).json()
     
-    # Process Hourly
     df = pd.DataFrame({
         "time": pd.to_datetime(r["hourly"]["time"]),
         "speed": r["hourly"]["wind_speed_10m"],
         "dir": r["hourly"]["wind_direction_10m"]
     })
     
-    # Process Sun Data - FIXED THE .date ERROR HERE
     sun = pd.DataFrame({
         "date": pd.to_datetime(r["daily"]["time"]).date,
         "sunrise": pd.to_datetime(r["daily"]["sunrise"]),
@@ -65,25 +68,21 @@ def get_eastbourne_data():
 # --- DATA PROCESSING ---
 try:
     df_hourly, df_sun = get_eastbourne_data()
-
     segments = []
+
     for _, day in df_sun.iterrows():
         sunrise, sunset = day['sunrise'], day['sunset']
-        # Divide daylight into 3 equal segments
         seg_duration = (sunset - sunrise) / 3
         
         for i in range(3):
             t0 = sunrise + (i * seg_duration)
             t1 = sunrise + ((i + 1) * seg_duration)
-            
             mask = (df_hourly['time'] >= t0) & (df_hourly['time'] < t1)
             seg_data = df_hourly[mask]
             
             if not seg_data.empty:
-                # Vector average for wind direction (more accurate)
                 rads = np.deg2rad(seg_data['dir'])
                 avg_dir = np.rad2deg(np.arctan2(np.sin(rads).mean(), np.cos(rads).mean())) % 360
-                
                 segments.append({
                     "day_label": day['date'].strftime("%a %d"),
                     "seg_num": i,
@@ -91,8 +90,6 @@ try:
                     "dir": avg_dir,
                     "x_id": f"{day['date']}_{i}"
                 })
-        
-        # Add a "Spacer" segment after each day for visual separation
         segments.append({"x_id": f"{day['date']}_spacer", "spacer": True})
 
     # --- UI ---
@@ -102,44 +99,35 @@ try:
 
     for s in segments:
         if "spacer" in s:
-            # Add an invisible bar to act as a gap
             fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color="rgba(0,0,0,0)", showlegend=False, hoverinfo='skip'))
             continue
 
-        # Color based on speed
-        color = get_color(s['speed'])
-        
-        # Draw the main segment bar
         fig.add_trace(go.Bar(
             x=[s['x_id']], y=[1],
-            marker_color=color,
-            showlegend=False,
-            hoverinfo='none'
+            marker_color=get_color(s['speed']),
+            showlegend=False, hoverinfo='none'
         ))
 
-        # Arrow logic: Points where wind is HEADING
+        # Arrow points where wind is HEADING
         heading = (s['dir'] + 180) % 360
-        
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=22, color="white")
+            font=dict(size=24, color="white")
         )
 
-        # Wind Speed Label (centered)
+        # Wind Speed Label at the BOTTOM
         fig.add_annotation(
-            x=s['x_id'], y=0.5,
+            x=s['x_id'], y=0.12,
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
-            font=dict(size=13, color="white"),
-            # Shift text if it clashes with the arrow
-            yshift=22 if get_arrow_y(s['dir']) == 0.5 else 0
+            font=dict(size=12, color="rgba(255,255,255,0.9)"),
         )
 
-    # Date Labels (placed below the groups)
+    # Date Labels
     unique_days = df_sun['date']
-    tick_vals = [f"{d}_1" for d in unique_days] # Center label on the middle segment
+    tick_vals = [f"{d}_1" for d in unique_days]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in unique_days]
 
     fig.update_layout(
@@ -148,12 +136,10 @@ try:
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        bargap=0, # We handle gaps via spacer bars
+        bargap=0,
         xaxis=dict(
-            showgrid=False, 
-            tickmode='array',
-            tickvals=tick_vals,
-            ticktext=tick_text,
+            showgrid=False, tickmode='array',
+            tickvals=tick_vals, ticktext=tick_text,
             fixedrange=True
         ),
         yaxis=dict(showgrid=False, visible=False, range=[0, 1], fixedrange=True)
@@ -162,6 +148,6 @@ try:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 except Exception as e:
-    st.error(f"Error initializing simple view: {e}")
+    st.error(f"Error: {e}")
 
-st.info("Top arrow = Northerly | Bottom arrow = Southerly | Middle = Other. Arrow points where wind is heading.")
+st.info("Arrows point where wind is heading. Top = Northerly bias | Bottom = Southerly bias | Middle = East/West.")
