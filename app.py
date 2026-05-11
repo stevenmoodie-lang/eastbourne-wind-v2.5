@@ -64,7 +64,6 @@ def get_dashboard_data():
         "sunset": pd.to_datetime(r["daily"]["sunset"])
     })
     
-    # Synthetic tide based on Wellington cycle
     tide_times = pd.date_range(start=df['time'].min(), periods=24*7, freq='h')
     tide_heights = [1.0 + 0.6 * np.sin(2 * np.pi * (t.hour + t.minute/60) / 12.4) for t in tide_times]
     df_tide = pd.DataFrame({"time": tide_times, "height": tide_heights})
@@ -73,7 +72,7 @@ def get_dashboard_data():
 
 try:
     df_hourly, df_sun, df_tide = get_dashboard_data()
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=12))).replace(tzinfo=None)
+    now = datetime.datetime.now() # NZ Timezone assumed for marker
 
     # --- 1. THE HEATSTRIP ---
     segments = []
@@ -112,7 +111,6 @@ try:
     def add_night_shading(fig):
         for i in range(len(df_sun)-1):
             fig.add_vrect(x0=df_sun.iloc[i]['sunset'], x1=df_sun.iloc[i+1]['sunrise'], fillcolor="rgba(0,0,0,0.3)", layer="below", line_width=0)
-        # Current time line
         fig.add_vline(x=now, line_width=1.5, line_dash="dash", line_color="white", opacity=0.8)
 
     # --- 2. WIND SPEED LINE GRAPH ---
@@ -125,7 +123,8 @@ try:
         height=200, margin=dict(l=10, r=10, t=5, b=5), template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
         xaxis=dict(showgrid=False, showticklabels=False, fixedrange=True),
-        yaxis=dict(title="Knots", titlefont=dict(size=10), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
+        # FIX: Using the correct title font dictionary structure
+        yaxis=dict(title=dict(text="Knots", font=dict(size=10)), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
     )
     st.plotly_chart(fig_wind, use_container_width=True, config={'displayModeBar': False})
 
