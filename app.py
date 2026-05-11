@@ -72,9 +72,10 @@ def get_dashboard_data():
 
 try:
     df, sun, df_tide = get_dashboard_data()
-    now = datetime.datetime.now()
+    # Correcting 'now' for NZ timezone offset
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=12))).replace(tzinfo=None)
 
-    # --- CREATE SUBPLOTS (Exactly like yesterday evening) ---
+    # --- CREATE SUBPLOTS ---
     fig = make_subplots(
         rows=3, cols=1, 
         shared_xaxes=True, 
@@ -82,7 +83,7 @@ try:
         row_heights=[0.02, 0.15, 0.10]
     )
 
-    # 1. HEATSTRIP (Row 1)
+    # 1. HEATSTRIP
     for i in range(len(df)):
         fig.add_trace(go.Bar(
             x=[df.iloc[i]['time']], y=[1],
@@ -90,14 +91,14 @@ try:
             showlegend=False, hoverinfo='none'
         ), row=1, col=1)
 
-    # 2. WIND LINE (Row 2)
+    # 2. WIND LINE
     fig.add_trace(go.Scatter(x=df['time'], y=df['gust'], fill='tonexty', fillcolor='rgba(255,255,255,0.05)', line=dict(width=0), showlegend=False), row=2, col=1)
     fig.add_trace(go.Scatter(x=df['time'], y=df['speed'], line=dict(color='white', width=2), showlegend=False), row=2, col=1)
 
-    # 3. TIDE (Row 3)
+    # 3. TIDE
     fig.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', fillcolor='rgba(0, 212, 255, 0.2)', line=dict(color='#00d4ff', width=2), showlegend=False), row=3, col=1)
 
-    # NIGHT SHADING & NOW LINE (Applied to whole subplot)
+    # NIGHT SHADING & NOW LINE
     for i in range(len(sun)-1):
         fig.add_vrect(x0=sun.iloc[i]['sunset'], x1=sun.iloc[i+1]['sunrise'], fillcolor="rgba(0,0,0,0.3)", layer="below", line_width=0)
     fig.add_vline(x=now, line_width=1.5, line_dash="dash", line_color="white", opacity=0.8)
@@ -114,7 +115,12 @@ try:
         xaxis=dict(visible=False, fixedrange=True),
         xaxis2=dict(visible=False, fixedrange=True),
         yaxis=dict(visible=False, fixedrange=True),
-        yaxis2=dict(title="Knots", titlefont=dict(size=10), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True),
+        # FIXED: Using nested title font dictionary
+        yaxis2=dict(
+            title=dict(text="Knots", font=dict(size=10)), 
+            showgrid=True, gridcolor='rgba(255,255,255,0.05)', 
+            zeroline=False, fixedrange=True
+        ),
         yaxis3=dict(visible=False, fixedrange=True)
     )
 
