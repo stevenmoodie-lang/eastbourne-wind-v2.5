@@ -8,58 +8,53 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS FOR UI ---
+# --- AGGRESSIVE CSS TO KILL THE HEADER ---
 st.markdown("""
     <style>
-        /* This pushes the whole app down to clear the Streamlit header */
+        /* Hide the decoration bar and the header container completely */
+        [data-testid="stHeader"], 
+        header, 
+        .st-emotion-cache-18ni77z, 
+        .st-emotion-cache-6qob1r {
+            display: none !important;
+            height: 0 !important;
+        }
+
+        /* Pull the main view up to the absolute top of the screen */
+        .stAppViewContainer {
+            top: -50px !important;
+        }
+
+        /* App Background */
         .stApp { 
-            margin-top: 2rem !important;
             background-color: #3d5a73; 
         }
         
-        /* Forces the main container to behave on mobile */
+        /* Safe zone for the title */
         .block-container { 
-            padding-top: 1rem !important; 
-            padding-bottom: 0rem;
+            padding-top: 4rem !important; 
             padding-left: 0.2rem !important;
             padding-right: 0.2rem !important;
         }
         
         .custom-title {
             text-align: center;
-            font-size: 1.6rem;
+            font-size: 1.8rem;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 0.5rem;
-            display: block;
+            margin-bottom: 0.2rem;
+            width: 100%;
         }
     </style>
+    <div class="custom-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
 
-# --- TITLE ---
-st.markdown('<div class="custom-title">Eastbourne Wind</div>', unsafe_allow_html=True)
-
-# --- SETTINGS ---
-LAT, LON = -41.291, 174.894 
-
-def get_color(knots):
-    if knots <= 6: return "rgba(173, 216, 230, 1.0)"
-    if knots <= 11: return "rgba(135, 206, 250, 1.0)"
-    if knots <= 15: return "rgba(0, 128, 0, 1.0)"
-    if knots <= 19: return "rgba(255, 200, 50, 1.0)"
-    if knots <= 28: return "rgba(255, 0, 0, 1.0)"
-    return "rgba(139, 0, 0, 1.0)"
-
-def get_arrow_y(deg):
-    if (75 < deg < 105) or (255 < deg < 285): return 0.5
-    if (105 <= deg <= 255): return 0.35 
-    return 0.75 
-
+# --- DATA FETCH ---
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": LAT, "longitude": LON,
+        "latitude": -41.291, "longitude": 174.894,
         "hourly": ["wind_speed_10m", "wind_direction_10m"],
         "daily": ["sunrise", "sunset"],
         "timezone": "Pacific/Auckland", "wind_speed_unit": "kn", "forecast_days": 7
@@ -76,6 +71,19 @@ def get_eastbourne_data():
         "sunset": pd.to_datetime(r["daily"]["sunset"])
     })
     return df, sun
+
+def get_color(knots):
+    if knots <= 6: return "rgba(173, 216, 230, 1.0)"
+    if knots <= 11: return "rgba(135, 206, 250, 1.0)"
+    if knots <= 15: return "rgba(0, 128, 0, 1.0)"
+    if knots <= 19: return "rgba(255, 200, 50, 1.0)"
+    if knots <= 28: return "rgba(255, 0, 0, 1.0)"
+    return "rgba(139, 0, 0, 1.0)"
+
+def get_arrow_y(deg):
+    if (75 < deg < 105) or (255 < deg < 285): return 0.5
+    if (105 <= deg <= 255): return 0.35 
+    return 0.75 
 
 try:
     df_hourly, df_sun = get_eastbourne_data()
@@ -113,16 +121,12 @@ try:
         ))
 
         heading = (s['dir'] + 180) % 360
-        
-        # Tiny Arrows
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
             font=dict(size=10, color="white") 
         )
-
-        # Tiny Knots
         fig.add_annotation(
             x=s['x_id'], y=-0.35, 
             text=f"<b>{round(s['speed'])}</b>",
@@ -130,7 +134,6 @@ try:
             font=dict(size=9, color="white"),
         )
 
-    # Date Labels at Top
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
@@ -143,8 +146,7 @@ try:
         bargap=0,
         xaxis=dict(
             showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text,
-            side="top", fixedrange=True,
-            tickfont=dict(size=10, color="white")
+            side="top", fixedrange=True, tickfont=dict(size=10, color="white")
         ),
         yaxis=dict(showgrid=False, visible=False, range=[-0.7, 1], fixedrange=True)
     )
