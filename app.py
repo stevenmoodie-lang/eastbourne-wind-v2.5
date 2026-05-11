@@ -8,28 +8,28 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS FOR MOBILE OPTIMIZATION ---
+# --- CSS FOR MOBILE & TITLE ---
 st.markdown("""
     <style>
-        /* Reduce padding for mobile screens */
+        /* Add significant space for the title to prevent cutoff */
         .block-container { 
-            padding-top: 2rem !important; 
+            padding-top: 5rem !important; 
             padding-bottom: 0rem;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.2rem !important;
+            padding-right: 0.2rem !important;
         }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
         
         .main-title {
             text-align: center;
-            font-size: 1.8rem; /* Smaller for mobile */
+            font-size: 1.6rem;
             font-weight: 700;
-            margin-bottom: 0.5rem;
             color: #ffffff;
+            position: absolute;
+            top: 1.5rem;
+            width: 100%;
+            left: 0;
         }
-        
-        /* Hide scrollbars on the chart container */
-        .element-container { overflow: visible !important; }
     </style>
     <div class="main-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
@@ -47,8 +47,8 @@ def get_color(knots):
 
 def get_arrow_y(deg):
     if (75 < deg < 105) or (255 < deg < 285): return 0.5
-    if (105 <= deg <= 255): return 0.3 # Higher than before to stay away from speed text
-    return 0.7 
+    if (105 <= deg <= 255): return 0.35 # Position for Southerly
+    return 0.75 # Position for Northerly
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -99,30 +99,32 @@ try:
             showlegend=False, hoverinfo='none'
         ))
 
-        # Arrow Positioning - Smaller for Mobile (size 15 instead of 22)
+        # Heading calculation
         heading = (s['dir'] + 180) % 360
+        
+        # Tiny Arrows
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=14, color="white") 
+            font=dict(size=11, color="white") 
         )
 
-        # Wind Speed Label - Smaller font (size 10) and shifted lower
+        # Tiny Knots
         fig.add_annotation(
-            x=s['x_id'], y=-0.25, # More space below the bar
+            x=s['x_id'], y=-0.3, 
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
-            font=dict(size=10, color="white"),
+            font=dict(size=9, color="white"),
         )
 
-    # Date Labels (Top)
+    # Date Labels
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
-        height=200, # Increased height to allow for vertical separation
-        margin=dict(l=5, r=5, t=50, b=50), # Large margins for labels
+        height=180,
+        margin=dict(l=5, r=5, t=40, b=40),
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
@@ -130,12 +132,12 @@ try:
         xaxis=dict(
             showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text,
             side="top", fixedrange=True,
-            tickfont=dict(size=11, color="white") # Smaller date font
+            tickfont=dict(size=10, color="white")
         ),
-        yaxis=dict(showgrid=False, visible=False, range=[-0.5, 1], fixedrange=True)
+        yaxis=dict(showgrid=False, visible=False, range=[-0.6, 1], fixedrange=True)
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 except Exception as e:
     st.error(f"Error: {e}")
