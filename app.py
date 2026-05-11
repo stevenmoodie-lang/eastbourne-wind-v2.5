@@ -2,13 +2,14 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import datetime
 import numpy as np
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS: HIDE HEADER & MOBILE OPTIMIZATION ---
+# --- CSS: HIDE HEADER & MOBILE FIX ---
 st.markdown("""
     <style>
         [data-testid="stHeader"], header { visibility: hidden; height: 0; }
@@ -34,14 +35,13 @@ st.markdown("""
 LAT, LON = -41.291, 174.894
 
 def get_color(knots):
-    if knots <= 6: return "rgba(173, 216, 230, 1.0)"    # Light Blue
-    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   # Lighter Blue
-    if knots <= 15: return "rgba(0, 128, 0, 1.0)"       # Green
-    if knots <= 19: return "rgba(255, 200, 50, 1.0)"    # Amber
-    if knots <= 28: return "rgba(255, 0, 0, 1.0)"       # Red
-    return "rgba(139, 0, 0, 1.0)"                       # Dark Red
+    if knots <= 6: return "rgba(173, 216, 230, 1.0)"    
+    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   
+    if knots <= 15: return "rgba(0, 128, 0, 1.0)"       
+    if knots <= 19: return "rgba(255, 200, 50, 1.0)"    
+    if knots <= 28: return "rgba(255, 0, 0, 1.0)"       
+    return "rgba(139, 0, 0, 1.0)"                       
 
-# --- DATA FETCHING ---
 @st.cache_data(ttl=600)
 def get_dashboard_data():
     url = "https://api.open-meteo.com/v1/forecast"
@@ -71,75 +71,54 @@ def get_dashboard_data():
     return df, sun, df_tide
 
 try:
-    df_hourly, df_sun, df_tide = get_dashboard_data()
-    now = datetime.datetime.now() # NZ Timezone assumed for marker
+    df, sun, df_tide = get_dashboard_data()
+    now = datetime.datetime.now()
 
-    # --- 1. THE HEATSTRIP ---
-    segments = []
-    for _, day in df_sun.iterrows():
-        sunrise, sunset = day['sunrise'], day['sunset']
-        seg_dur = (sunset - sunrise) / 3
-        for i in range(3):
-            t0, t1 = sunrise + (i*seg_dur), sunrise + ((i+1)*seg_dur)
-            mask = (df_hourly['time'] >= t0) & (df_hourly['time'] < t1)
-            d = df_hourly[mask]
-            if not d.empty:
-                rads = np.deg2rad(d['dir'])
-                avg_dir = np.rad2deg(np.arctan2(np.sin(rads).mean(), np.cos(rads).mean())) % 360
-                segments.append({"x_id": f"{day['date']}_{i}", "speed": d['speed'].mean(), "dir": avg_dir})
-        segments.append({"x_id": f"{day['date']}_spacer", "spacer": True})
-
-    fig_heat = go.Figure()
-    for s in segments:
-        if "spacer" in s:
-            fig_heat.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color="rgba(0,0,0,0)", showlegend=False, hoverinfo='skip'))
-            continue
-        fig_heat.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color=get_color(s['speed']), showlegend=False, hoverinfo='none'))
-        heading = (s['dir'] + 180) % 360
-        y_pos = 0.5 if (75 < s['dir'] < 105 or 255 < s['dir'] < 285) else (0.35 if 105 <= s['dir'] <= 255 else 0.75)
-        fig_heat.add_annotation(x=s['x_id'], y=y_pos, text="➤", showarrow=False, textangle=heading-90, font=dict(size=10, color="white"))
-        fig_heat.add_annotation(x=s['x_id'], y=-0.35, text=f"<b>{round(s['speed'])}</b>", showarrow=False, font=dict(size=9, color="white"))
-
-    fig_heat.update_layout(
-        height=160, margin=dict(l=5, r=5, t=30, b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', bargap=0,
-        xaxis=dict(showgrid=False, tickmode='array', tickvals=[f"{d}_1" for d in df_sun['date']], ticktext=[f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']], side="top", tickfont=dict(size=10), fixedrange=True),
-        yaxis=dict(visible=False, range=[-0.7, 1], fixedrange=True)
+    # --- CREATE SUBPLOTS (Exactly like yesterday evening) ---
+    fig = make_subplots(
+        rows=3, cols=1, 
+        shared_xaxes=True, 
+        vertical_spacing=0.02,
+        row_heights=[0.02, 0.15, 0.10]
     )
-    st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
 
-    # --- HELPER: NIGHT SHADING ---
-    def add_night_shading(fig):
-        for i in range(len(df_sun)-1):
-            fig.add_vrect(x0=df_sun.iloc[i]['sunset'], x1=df_sun.iloc[i+1]['sunrise'], fillcolor="rgba(0,0,0,0.3)", layer="below", line_width=0)
-        fig.add_vline(x=now, line_width=1.5, line_dash="dash", line_color="white", opacity=0.8)
+    # 1. HEATSTRIP (Row 1)
+    for i in range(len(df)):
+        fig.add_trace(go.Bar(
+            x=[df.iloc[i]['time']], y=[1],
+            marker_color=get_color(df.iloc[i]['speed']),
+            showlegend=False, hoverinfo='none'
+        ), row=1, col=1)
 
-    # --- 2. WIND SPEED LINE GRAPH ---
-    fig_wind = go.Figure()
-    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['gust'], fill='tonexty', fillcolor='rgba(255,255,255,0.05)', line=dict(width=0), name="Gust", hoverinfo='skip'))
-    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['speed'], line=dict(color='white', width=2), name="Wind"))
-    add_night_shading(fig_wind)
-    
-    fig_wind.update_layout(
-        height=200, margin=dict(l=10, r=10, t=5, b=5), template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
-        xaxis=dict(showgrid=False, showticklabels=False, fixedrange=True),
-        # FIX: Using the correct title font dictionary structure
-        yaxis=dict(title=dict(text="Knots", font=dict(size=10)), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
+    # 2. WIND LINE (Row 2)
+    fig.add_trace(go.Scatter(x=df['time'], y=df['gust'], fill='tonexty', fillcolor='rgba(255,255,255,0.05)', line=dict(width=0), showlegend=False), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df['time'], y=df['speed'], line=dict(color='white', width=2), showlegend=False), row=2, col=1)
+
+    # 3. TIDE (Row 3)
+    fig.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', fillcolor='rgba(0, 212, 255, 0.2)', line=dict(color='#00d4ff', width=2), showlegend=False), row=3, col=1)
+
+    # NIGHT SHADING & NOW LINE (Applied to whole subplot)
+    for i in range(len(sun)-1):
+        fig.add_vrect(x0=sun.iloc[i]['sunset'], x1=sun.iloc[i+1]['sunrise'], fillcolor="rgba(0,0,0,0.3)", layer="below", line_width=0)
+    fig.add_vline(x=now, line_width=1.5, line_dash="dash", line_color="white", opacity=0.8)
+
+    # LAYOUT
+    fig.update_layout(
+        height=450,
+        margin=dict(l=10, r=10, t=20, b=20),
+        template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        bargap=0,
+        xaxis3=dict(showgrid=False, tickformat="%a", dtick=86400000.0, tickfont=dict(size=10), fixedrange=True),
+        xaxis=dict(visible=False, fixedrange=True),
+        xaxis2=dict(visible=False, fixedrange=True),
+        yaxis=dict(visible=False, fixedrange=True),
+        yaxis2=dict(title="Knots", titlefont=dict(size=10), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True),
+        yaxis3=dict(visible=False, fixedrange=True)
     )
-    st.plotly_chart(fig_wind, use_container_width=True, config={'displayModeBar': False})
 
-    # --- 3. TIDE GRAPH ---
-    fig_tide = go.Figure()
-    fig_tide.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', fillcolor='rgba(0, 212, 255, 0.2)', line=dict(color='#00d4ff', width=2), hoverinfo='skip'))
-    add_night_shading(fig_tide)
-    
-    fig_tide.update_layout(
-        height=140, margin=dict(l=10, r=10, t=5, b=20), template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(showgrid=False, tickformat="%a", dtick=86400000.0, tickfont=dict(size=9), fixedrange=True),
-        yaxis=dict(visible=False, fixedrange=True)
-    )
-    st.plotly_chart(fig_tide, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 except Exception as e:
     st.error(f"Dashboard Error: {e}")
