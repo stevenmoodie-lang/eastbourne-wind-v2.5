@@ -11,22 +11,27 @@ st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 # --- CSS FOR UI ---
 st.markdown("""
     <style>
-        /* Standardize padding for mobile */
+        /* This pushes the whole app down to clear the Streamlit header */
+        .stApp { 
+            margin-top: 2rem !important;
+            background-color: #3d5a73; 
+        }
+        
+        /* Forces the main container to behave on mobile */
         .block-container { 
-            padding-top: 1.5rem !important; 
+            padding-top: 1rem !important; 
             padding-bottom: 0rem;
             padding-left: 0.2rem !important;
             padding-right: 0.2rem !important;
         }
-        .stApp { background-color: #3d5a73; color: #f8f9fa; }
         
-        /* Clean Title Styling */
         .custom-title {
             text-align: center;
             font-size: 1.6rem;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
+            display: block;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -109,17 +114,17 @@ try:
 
         heading = (s['dir'] + 180) % 360
         
-        # Tiny Arrows (Size 11)
+        # Tiny Arrows
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=11, color="white") 
+            font=dict(size=10, color="white") 
         )
 
-        # Tiny Knots (Size 9)
+        # Tiny Knots
         fig.add_annotation(
-            x=s['x_id'], y=-0.3, 
+            x=s['x_id'], y=-0.35, 
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
             font=dict(size=9, color="white"),
@@ -141,7 +146,7 @@ try:
             side="top", fixedrange=True,
             tickfont=dict(size=10, color="white")
         ),
-        yaxis=dict(showgrid=False, visible=False, range=[-0.6, 1], fixedrange=True)
+        yaxis=dict(showgrid=False, visible=False, range=[-0.7, 1], fixedrange=True)
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
