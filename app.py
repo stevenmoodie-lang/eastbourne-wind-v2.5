@@ -27,14 +27,12 @@ def get_color(knots):
     return "rgba(139, 0, 0, 1.0)"                       # Dark Red
 
 def get_arrow_y(deg):
-    # Tightened thresholds for "Middle" (East/West)
+    # Adjusted zones to provide more vertical separation
     if (75 < deg < 105) or (255 < deg < 285):
-        return 0.65
-    # Southerly zone (Bottom, but high enough to clear text)
+        return 0.65 # Middle
     if (105 <= deg <= 255):
-        return 0.40
-    # Northerly zone (Top)
-    return 0.90
+        return 0.42 # Southerly (Bottom - nudged up to avoid text)
+    return 0.88     # Northerly (Top)
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -76,34 +74,41 @@ try:
 
         fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color=get_color(s['speed']), showlegend=False, hoverinfo='none'))
 
-        # Arrow Positioning (Direction heading)
+        # Arrow Positioning
         heading = (s['dir'] + 180) % 360
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=18, color="white") # Slightly smaller arrow
+            font=dict(size=20, color="white") 
         )
 
-        # Wind Speed Label at the ABSOLUTE BOTTOM
+        # Wind Speed Label - Nudged up for better spacing at the bottom
         fig.add_annotation(
-            x=s['x_id'], y=0.07,
+            x=s['x_id'], y=0.12,
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
-            font=dict(size=11, color="rgba(255,255,255,0.9)"),
+            font=dict(size=12, color="rgba(255,255,255,0.95)"),
         )
 
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
-        height=130, # Reduced height
-        margin=dict(l=5, r=5, t=5, b=20),
+        height=160, # Slightly taller to prevent cutoff
+        margin=dict(l=10, r=10, t=30, b=45), # Increased margins
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         bargap=0,
-        xaxis=dict(showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text, fixedrange=True),
+        xaxis=dict(
+            showgrid=False, 
+            tickmode='array', 
+            tickvals=tick_vals, 
+            ticktext=tick_text, 
+            fixedrange=True,
+            tickfont=dict(size=13, color="white") # Brighter day font
+        ),
         yaxis=dict(showgrid=False, visible=False, range=[0, 1], fixedrange=True)
     )
 
