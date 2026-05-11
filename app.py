@@ -8,18 +8,28 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS FOR SPACING & TITLE ---
+# --- CSS FOR MOBILE OPTIMIZATION ---
 st.markdown("""
     <style>
-        .block-container { padding-top: 4rem !important; padding-bottom: 0rem; }
+        /* Reduce padding for mobile screens */
+        .block-container { 
+            padding-top: 2rem !important; 
+            padding-bottom: 0rem;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
+        
         .main-title {
             text-align: center;
-            font-size: 2.2rem;
+            font-size: 1.8rem; /* Smaller for mobile */
             font-weight: 700;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
             color: #ffffff;
         }
+        
+        /* Hide scrollbars on the chart container */
+        .element-container { overflow: visible !important; }
     </style>
     <div class="main-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
@@ -28,17 +38,17 @@ st.markdown("""
 LAT, LON = -41.291, 174.894 
 
 def get_color(knots):
-    if knots <= 6: return "rgba(173, 216, 230, 1.0)"    # Light Blue
-    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   # Lighter Blue
-    if knots <= 15: return "rgba(0, 128, 0, 1.0)"       # Green
-    if knots <= 19: return "rgba(255, 200, 50, 1.0)"    # Amber
-    if knots <= 28: return "rgba(255, 0, 0, 1.0)"       # Red
-    return "rgba(139, 0, 0, 1.0)"                       # Dark Red
+    if knots <= 6: return "rgba(173, 216, 230, 1.0)"
+    if knots <= 11: return "rgba(135, 206, 250, 1.0)"
+    if knots <= 15: return "rgba(0, 128, 0, 1.0)"
+    if knots <= 19: return "rgba(255, 200, 50, 1.0)"
+    if knots <= 28: return "rgba(255, 0, 0, 1.0)"
+    return "rgba(139, 0, 0, 1.0)"
 
 def get_arrow_y(deg):
-    if (75 < deg < 105) or (255 < deg < 285): return 0.5  # Pure Middle
-    if (105 <= deg <= 255): return 0.25                  # Southerly
-    return 0.75                                          # Northerly
+    if (75 < deg < 105) or (255 < deg < 285): return 0.5
+    if (105 <= deg <= 255): return 0.3 # Higher than before to stay away from speed text
+    return 0.7 
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -83,54 +93,49 @@ try:
             fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color="rgba(0,0,0,0)", showlegend=False, hoverinfo='skip'))
             continue
 
-        # The Heat Bar
         fig.add_trace(go.Bar(
             x=[s['x_id']], y=[1],
             marker_color=get_color(s['speed']),
             showlegend=False, hoverinfo='none'
         ))
 
-        # The Arrow (Heading direction)
+        # Arrow Positioning - Smaller for Mobile (size 15 instead of 22)
         heading = (s['dir'] + 180) % 360
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=22, color="white") 
+            font=dict(size=14, color="white") 
         )
 
-        # The Knots Text (placed BELOW the bar by using a negative Y coordinate or separate annotation)
+        # Wind Speed Label - Smaller font (size 10) and shifted lower
         fig.add_annotation(
-            x=s['x_id'], y=-0.15,
+            x=s['x_id'], y=-0.25, # More space below the bar
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
-            font=dict(size=12, color="white"),
+            font=dict(size=10, color="white"),
         )
 
-    # Calculate tick positions for the TOP day labels
+    # Date Labels (Top)
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
-        height=180,
-        margin=dict(l=10, r=10, t=40, b=40),
+        height=200, # Increased height to allow for vertical separation
+        margin=dict(l=5, r=5, t=50, b=50), # Large margins for labels
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         bargap=0,
         xaxis=dict(
-            showgrid=False, 
-            tickmode='array', 
-            tickvals=tick_vals, 
-            ticktext=tick_text,
-            side="top", # DAY OF WEEK AT TOP
-            fixedrange=True,
-            tickfont=dict(size=14, color="white")
+            showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text,
+            side="top", fixedrange=True,
+            tickfont=dict(size=11, color="white") # Smaller date font
         ),
-        yaxis=dict(showgrid=False, visible=False, range=[-0.3, 1], fixedrange=True)
+        yaxis=dict(showgrid=False, visible=False, range=[-0.5, 1], fixedrange=True)
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'responsive': True})
 
 except Exception as e:
     st.error(f"Error: {e}")
