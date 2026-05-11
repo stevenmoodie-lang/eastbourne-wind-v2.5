@@ -11,35 +11,30 @@ st.set_page_config(page_title="Eastbourne Wind - Simple", layout="wide")
 st.markdown("""
     <style>
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
-        .block-container { padding-top: 1.5rem; padding-bottom: 0rem; }
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- SETTINGS ---
-LAT, LON = -41.291, 174.894  # Eastbourne Beach
+LAT, LON = -41.291, 174.894 
 
 def get_color(knots):
     if knots <= 6: return "rgba(173, 216, 230, 1.0)"    # Light Blue
-    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   # Lighter Blue (LightSkyBlue)
+    if knots <= 11: return "rgba(135, 206, 250, 1.0)"   # Lighter Blue
     if knots <= 15: return "rgba(0, 128, 0, 1.0)"       # Green
     if knots <= 19: return "rgba(255, 200, 50, 1.0)"    # Amber
     if knots <= 28: return "rgba(255, 0, 0, 1.0)"       # Red
     return "rgba(139, 0, 0, 1.0)"                       # Dark Red
 
 def get_arrow_y(deg):
-    """
-    Arrow positioning logic.
-    Middle is strictly reserved for winds within 15 degrees of East (90) or West (270).
-    Everything else is categorized as North (Top) or South (Bottom).
-    """
-    # Middle range for East (75 to 105) and West (255 to 285)
+    # Tightened thresholds for "Middle" (East/West)
     if (75 < deg < 105) or (255 < deg < 285):
-        return 0.5
-    # If it's on the southern half of the compass
+        return 0.65
+    # Southerly zone (Bottom, but high enough to clear text)
     if (105 <= deg <= 255):
-        return 0.2
-    # Otherwise it's Northern half
-    return 0.8
+        return 0.40
+    # Northerly zone (Top)
+    return 0.90
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -51,21 +46,10 @@ def get_eastbourne_data():
         "timezone": "Pacific/Auckland", "wind_speed_unit": "kn", "forecast_days": 7
     }
     r = requests.get(url, params=params).json()
-    
-    df = pd.DataFrame({
-        "time": pd.to_datetime(r["hourly"]["time"]),
-        "speed": r["hourly"]["wind_speed_10m"],
-        "dir": r["hourly"]["wind_direction_10m"]
-    })
-    
-    sun = pd.DataFrame({
-        "date": pd.to_datetime(r["daily"]["time"]).date,
-        "sunrise": pd.to_datetime(r["daily"]["sunrise"]),
-        "sunset": pd.to_datetime(r["daily"]["sunset"])
-    })
+    df = pd.DataFrame({"time": pd.to_datetime(r["hourly"]["time"]), "speed": r["hourly"]["wind_speed_10m"], "dir": r["hourly"]["wind_direction_10m"]})
+    sun = pd.DataFrame({"date": pd.to_datetime(r["daily"]["time"]).date, "sunrise": pd.to_datetime(r["daily"]["sunrise"]), "sunset": pd.to_datetime(r["daily"]["sunset"])})
     return df, sun
 
-# --- DATA PROCESSING ---
 try:
     df_hourly, df_sun = get_eastbourne_data()
     segments = []
@@ -73,27 +57,15 @@ try:
     for _, day in df_sun.iterrows():
         sunrise, sunset = day['sunrise'], day['sunset']
         seg_duration = (sunset - sunrise) / 3
-        
         for i in range(3):
-            t0 = sunrise + (i * seg_duration)
-            t1 = sunrise + ((i + 1) * seg_duration)
+            t0, t1 = sunrise + (i * seg_duration), sunrise + ((i + 1) * seg_duration)
             mask = (df_hourly['time'] >= t0) & (df_hourly['time'] < t1)
             seg_data = df_hourly[mask]
-            
             if not seg_data.empty:
                 rads = np.deg2rad(seg_data['dir'])
                 avg_dir = np.rad2deg(np.arctan2(np.sin(rads).mean(), np.cos(rads).mean())) % 360
-                segments.append({
-                    "day_label": day['date'].strftime("%a %d"),
-                    "seg_num": i,
-                    "speed": seg_data['speed'].mean(),
-                    "dir": avg_dir,
-                    "x_id": f"{day['date']}_{i}"
-                })
+                segments.append({"day_label": day['date'].strftime("%a %d"), "seg_num": i, "speed": seg_data['speed'].mean(), "dir": avg_dir, "x_id": f"{day['date']}_{i}"})
         segments.append({"x_id": f"{day['date']}_spacer", "spacer": True})
-
-    # --- UI ---
-    st.title("Eastbourne Wind Outlook")
 
     fig = go.Figure()
 
@@ -102,46 +74,36 @@ try:
             fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color="rgba(0,0,0,0)", showlegend=False, hoverinfo='skip'))
             continue
 
-        fig.add_trace(go.Bar(
-            x=[s['x_id']], y=[1],
-            marker_color=get_color(s['speed']),
-            showlegend=False, hoverinfo='none'
-        ))
+        fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color=get_color(s['speed']), showlegend=False, hoverinfo='none'))
 
-        # Arrow points where wind is HEADING
+        # Arrow Positioning (Direction heading)
         heading = (s['dir'] + 180) % 360
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
             text="➤", showarrow=False,
             textangle=heading - 90,
-            font=dict(size=24, color="white")
+            font=dict(size=18, color="white") # Slightly smaller arrow
         )
 
-        # Wind Speed Label at the BOTTOM
+        # Wind Speed Label at the ABSOLUTE BOTTOM
         fig.add_annotation(
-            x=s['x_id'], y=0.12,
+            x=s['x_id'], y=0.07,
             text=f"<b>{round(s['speed'])}</b>",
             showarrow=False,
-            font=dict(size=12, color="rgba(255,255,255,0.9)"),
+            font=dict(size=11, color="rgba(255,255,255,0.9)"),
         )
 
-    # Date Labels
-    unique_days = df_sun['date']
-    tick_vals = [f"{d}_1" for d in unique_days]
-    tick_text = [f"<b>{d.strftime('%a')}</b>" for d in unique_days]
+    tick_vals = [f"{d}_1" for d in df_sun['date']]
+    tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
-        height=200,
-        margin=dict(l=10, r=10, t=10, b=30),
+        height=130, # Reduced height
+        margin=dict(l=5, r=5, t=5, b=20),
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         bargap=0,
-        xaxis=dict(
-            showgrid=False, tickmode='array',
-            tickvals=tick_vals, ticktext=tick_text,
-            fixedrange=True
-        ),
+        xaxis=dict(showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text, fixedrange=True),
         yaxis=dict(showgrid=False, visible=False, range=[0, 1], fixedrange=True)
     )
 
@@ -149,5 +111,3 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
-
-st.info("Arrows point where wind is heading. Top = Northerly bias | Bottom = Southerly bias | Middle = East/West.")
