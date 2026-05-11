@@ -6,13 +6,29 @@ import datetime
 import numpy as np
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Eastbourne Wind - Simple", layout="wide")
+st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
+# --- CSS FOR SPACING & TITLE ---
 st.markdown("""
     <style>
+        /* Adds space at the very top of the page */
+        .block-container { 
+            padding-top: 4rem !important; 
+            padding-bottom: 0rem; 
+        }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        
+        /* Custom Title Styling */
+        .main-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: #ffffff;
+            font-family: 'Source Sans Pro', sans-serif;
+        }
     </style>
+    <div class="main-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
 
 # --- SETTINGS ---
@@ -27,12 +43,11 @@ def get_color(knots):
     return "rgba(139, 0, 0, 1.0)"                       # Dark Red
 
 def get_arrow_y(deg):
-    # Adjusted zones to provide more vertical separation
     if (75 < deg < 105) or (255 < deg < 285):
-        return 0.65 # Middle
+        return 0.65 
     if (105 <= deg <= 255):
-        return 0.42 # Southerly (Bottom - nudged up to avoid text)
-    return 0.88     # Northerly (Top)
+        return 0.42 
+    return 0.88     
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -74,7 +89,6 @@ try:
 
         fig.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color=get_color(s['speed']), showlegend=False, hoverinfo='none'))
 
-        # Arrow Positioning
         heading = (s['dir'] + 180) % 360
         fig.add_annotation(
             x=s['x_id'], y=get_arrow_y(s['dir']),
@@ -83,7 +97,6 @@ try:
             font=dict(size=20, color="white") 
         )
 
-        # Wind Speed Label - Nudged up for better spacing at the bottom
         fig.add_annotation(
             x=s['x_id'], y=0.12,
             text=f"<b>{round(s['speed'])}</b>",
@@ -95,19 +108,15 @@ try:
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
-        height=160, # Slightly taller to prevent cutoff
-        margin=dict(l=10, r=10, t=30, b=45), # Increased margins
+        height=160,
+        margin=dict(l=10, r=10, t=30, b=45),
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         bargap=0,
         xaxis=dict(
-            showgrid=False, 
-            tickmode='array', 
-            tickvals=tick_vals, 
-            ticktext=tick_text, 
-            fixedrange=True,
-            tickfont=dict(size=13, color="white") # Brighter day font
+            showgrid=False, tickmode='array', tickvals=tick_vals, ticktext=tick_text, 
+            fixedrange=True, tickfont=dict(size=13, color="white")
         ),
         yaxis=dict(showgrid=False, visible=False, range=[0, 1], fixedrange=True)
     )
