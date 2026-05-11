@@ -11,27 +11,31 @@ st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 # --- CSS FOR MOBILE & TITLE ---
 st.markdown("""
     <style>
-        /* Add significant space for the title to prevent cutoff */
+        /* Container padding to center the content vertically */
         .block-container { 
-            padding-top: 5rem !important; 
+            padding-top: 2rem !important; 
             padding-bottom: 0rem;
             padding-left: 0.2rem !important;
             padding-right: 0.2rem !important;
         }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
         
-        .main-title {
+        /* New Title Styling (No overlapping) */
+        .title-container {
             text-align: center;
+            padding-bottom: 1.5rem; /* Gap between title and graph */
+            width: 100%;
+        }
+        .main-title {
             font-size: 1.6rem;
             font-weight: 700;
             color: #ffffff;
-            position: absolute;
-            top: 1.5rem;
-            width: 100%;
-            left: 0;
+            margin: 0;
         }
     </style>
-    <div class="main-title">Eastbourne Wind</div>
+    <div class="title-container">
+        <div class="main-title">Eastbourne Wind</div>
+    </div>
 """, unsafe_allow_html=True)
 
 # --- SETTINGS ---
@@ -47,8 +51,8 @@ def get_color(knots):
 
 def get_arrow_y(deg):
     if (75 < deg < 105) or (255 < deg < 285): return 0.5
-    if (105 <= deg <= 255): return 0.35 # Position for Southerly
-    return 0.75 # Position for Northerly
+    if (105 <= deg <= 255): return 0.35 
+    return 0.75 
 
 @st.cache_data(ttl=600)
 def get_eastbourne_data():
@@ -99,7 +103,6 @@ try:
             showlegend=False, hoverinfo='none'
         ))
 
-        # Heading calculation
         heading = (s['dir'] + 180) % 360
         
         # Tiny Arrows
@@ -118,13 +121,12 @@ try:
             font=dict(size=9, color="white"),
         )
 
-    # Date Labels
     tick_vals = [f"{d}_1" for d in df_sun['date']]
     tick_text = [f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']]
 
     fig.update_layout(
         height=180,
-        margin=dict(l=5, r=5, t=40, b=40),
+        margin=dict(l=5, r=5, t=30, b=40),
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
