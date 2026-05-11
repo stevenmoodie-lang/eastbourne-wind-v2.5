@@ -8,13 +8,14 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- CSS: UI FIXES ---
+# --- AGGRESSIVE CSS TO HIDE STREAMLIT HEADER & SET SAFE ZONE ---
 st.markdown("""
     <style>
         [data-testid="stHeader"], header { visibility: hidden; height: 0; }
+        .stAppViewContainer { top: -40px !important; }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
         .block-container { 
-            padding-top: 2rem !important; 
+            padding-top: 3.5rem !important; 
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
@@ -29,7 +30,7 @@ st.markdown("""
     <div class="custom-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
 
-# --- SETTINGS & RATINGS ---
+# --- SETTINGS ---
 LAT, LON = -41.291, 174.894
 
 def get_color(knots):
@@ -66,10 +67,8 @@ def get_weather_data():
 
 @st.cache_data(ttl=3600)
 def get_tide_data():
-    # NIWA / Open-Meteo don't provide easy free tides, 
-    # using a synthetic tide for Wellington for demonstration
-    times = pd.date_range(start=datetime.datetime.now().date(), periods=24*7, freq='H')
-    # M2 Tide cycle approx 12.4 hours
+    # Fix: Pandas 3.0 requires lowercase 'h' for hourly frequency
+    times = pd.date_range(start=datetime.datetime.now().date(), periods=24*7, freq='h')
     heights = [1.0 + 0.6 * np.sin(2 * np.pi * (t.hour + t.minute/60) / 12.4) for t in times]
     return pd.DataFrame({"time": times, "height": heights})
 
@@ -77,7 +76,7 @@ try:
     df_hourly, df_sun = get_weather_data()
     df_tide = get_tide_data()
 
-    # --- 1. THE HEATSTRIP (TOP) ---
+    # --- 1. HEATSTRIP (TOP) ---
     segments = []
     for _, day in df_sun.iterrows():
         sunrise, sunset = day['sunrise'], day['sunset']
@@ -89,7 +88,7 @@ try:
             if not d.empty:
                 rads = np.deg2rad(d['dir'])
                 avg_dir = np.rad2deg(np.arctan2(np.sin(rads).mean(), np.cos(rads).mean())) % 360
-                segments.append({"x_id": f"{day['date']}_{i}", "speed": d['speed'].mean(), "dir": avg_dir, "day": day['date']})
+                segments.append({"x_id": f"{day['date']}_{i}", "speed": d['speed'].mean(), "dir": avg_dir})
         segments.append({"x_id": f"{day['date']}_spacer", "spacer": True})
 
     fig_heat = go.Figure()
@@ -107,34 +106,34 @@ try:
 
     fig_heat.update_layout(
         height=160, margin=dict(l=5, r=5, t=30, b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', bargap=0,
-        xaxis=dict(showgrid=False, tickmode='array', tickvals=[f"{d}_1" for d in df_sun['date']], ticktext=[f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']], side="top", tickfont=dict(size=10)),
+        xaxis=dict(showgrid=False, tickmode='array', tickvals=[f"{d}_1" for d in df_sun['date']], ticktext=[f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']], side="top", tickfont=dict(size=10), fixedrange=True),
         yaxis=dict(visible=False, range=[-0.7, 1], fixedrange=True)
     )
     st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
 
-    # --- 2. WIND SPEED LINE GRAPH ---
+    # --- 2. WIND LINE GRAPH ---
     fig_wind = go.Figure()
-    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['gust'], name="Gust", line=dict(color='rgba(255,255,255,0.2)', width=1), fill='tonexty'))
+    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['gust'], name="Gust", line=dict(color='rgba(255,255,255,0.15)', width=1), fill='tonexty', hoverinfo='skip'))
     fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['speed'], name="Speed", line=dict(color='white', width=2)))
     
     fig_wind.update_layout(
-        height=200, margin=dict(l=10, r=10, t=10, b=10), template="plotly_dark",
+        height=180, margin=dict(l=10, r=10, t=10, b=10), template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         showlegend=False,
-        xaxis=dict(showgrid=False, showticklabels=False),
-        yaxis=dict(title="Knots", showgrid=True, gridcolor='rgba(255,255,255,0.1)', zeroline=False)
+        xaxis=dict(showgrid=False, showticklabels=False, fixedrange=True),
+        yaxis=dict(title=dict(text="Knots", font=dict(size=10)), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
     )
     st.plotly_chart(fig_wind, use_container_width=True, config={'displayModeBar': False})
 
     # --- 3. TIDE GRAPH ---
     fig_tide = go.Figure()
-    fig_tide.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', line=dict(color='#00d4ff')))
+    fig_tide.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', line=dict(color='#00d4ff', width=2), hoverinfo='skip'))
     
     fig_tide.update_layout(
-        height=150, margin=dict(l=10, r=10, t=10, b=30), template="plotly_dark",
+        height=120, margin=dict(l=10, r=10, t=5, b=20), template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(showgrid=False, dtick=86400000.0), # Grid every 24h
-        yaxis=dict(visible=False)
+        xaxis=dict(showgrid=False, dtick=86400000.0, tickformat="%a", tickfont=dict(size=9), fixedrange=True),
+        yaxis=dict(visible=False, fixedrange=True)
     )
     st.plotly_chart(fig_tide, use_container_width=True, config={'displayModeBar': False})
 
