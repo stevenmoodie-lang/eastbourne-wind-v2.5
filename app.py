@@ -8,14 +8,14 @@ import numpy as np
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eastbourne Wind", layout="wide")
 
-# --- AGGRESSIVE CSS TO HIDE STREAMLIT HEADER & SET SAFE ZONE ---
+# --- CSS: HIDE HEADER & MOBILE OPTIMIZATION ---
 st.markdown("""
     <style>
         [data-testid="stHeader"], header { visibility: hidden; height: 0; }
-        .stAppViewContainer { top: -40px !important; }
+        .stAppViewContainer { top: -45px !important; }
         .stApp { background-color: #3d5a73; color: #f8f9fa; }
         .block-container { 
-            padding-top: 3.5rem !important; 
+            padding-top: 3rem !important; 
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
@@ -24,13 +24,13 @@ st.markdown("""
             font-size: 1.8rem;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.8rem;
         }
     </style>
     <div class="custom-title">Eastbourne Wind</div>
 """, unsafe_allow_html=True)
 
-# --- SETTINGS ---
+# --- SETTINGS & RATINGS ---
 LAT, LON = -41.291, 174.894
 
 def get_color(knots):
@@ -43,7 +43,7 @@ def get_color(knots):
 
 # --- DATA FETCHING ---
 @st.cache_data(ttl=600)
-def get_weather_data():
+def get_dashboard_data():
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": LAT, "longitude": LON,
@@ -63,20 +63,19 @@ def get_weather_data():
         "sunrise": pd.to_datetime(r["daily"]["sunrise"]),
         "sunset": pd.to_datetime(r["daily"]["sunset"])
     })
-    return df, sun
-
-@st.cache_data(ttl=3600)
-def get_tide_data():
-    # Fix: Pandas 3.0 requires lowercase 'h' for hourly frequency
-    times = pd.date_range(start=datetime.datetime.now().date(), periods=24*7, freq='h')
-    heights = [1.0 + 0.6 * np.sin(2 * np.pi * (t.hour + t.minute/60) / 12.4) for t in times]
-    return pd.DataFrame({"time": times, "height": heights})
+    
+    # Synthetic tide based on Wellington cycle
+    tide_times = pd.date_range(start=df['time'].min(), periods=24*7, freq='h')
+    tide_heights = [1.0 + 0.6 * np.sin(2 * np.pi * (t.hour + t.minute/60) / 12.4) for t in tide_times]
+    df_tide = pd.DataFrame({"time": tide_times, "height": tide_heights})
+    
+    return df, sun, df_tide
 
 try:
-    df_hourly, df_sun = get_weather_data()
-    df_tide = get_tide_data()
+    df_hourly, df_sun, df_tide = get_dashboard_data()
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=12))).replace(tzinfo=None)
 
-    # --- 1. HEATSTRIP (TOP) ---
+    # --- 1. THE HEATSTRIP ---
     segments = []
     for _, day in df_sun.iterrows():
         sunrise, sunset = day['sunrise'], day['sunset']
@@ -96,11 +95,9 @@ try:
         if "spacer" in s:
             fig_heat.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color="rgba(0,0,0,0)", showlegend=False, hoverinfo='skip'))
             continue
-        
         fig_heat.add_trace(go.Bar(x=[s['x_id']], y=[1], marker_color=get_color(s['speed']), showlegend=False, hoverinfo='none'))
         heading = (s['dir'] + 180) % 360
         y_pos = 0.5 if (75 < s['dir'] < 105 or 255 < s['dir'] < 285) else (0.35 if 105 <= s['dir'] <= 255 else 0.75)
-        
         fig_heat.add_annotation(x=s['x_id'], y=y_pos, text="➤", showarrow=False, textangle=heading-90, font=dict(size=10, color="white"))
         fig_heat.add_annotation(x=s['x_id'], y=-0.35, text=f"<b>{round(s['speed'])}</b>", showarrow=False, font=dict(size=9, color="white"))
 
@@ -111,31 +108,39 @@ try:
     )
     st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
 
-    # --- 2. WIND LINE GRAPH ---
+    # --- HELPER: NIGHT SHADING ---
+    def add_night_shading(fig):
+        for i in range(len(df_sun)-1):
+            fig.add_vrect(x0=df_sun.iloc[i]['sunset'], x1=df_sun.iloc[i+1]['sunrise'], fillcolor="rgba(0,0,0,0.3)", layer="below", line_width=0)
+        # Current time line
+        fig.add_vline(x=now, line_width=1.5, line_dash="dash", line_color="white", opacity=0.8)
+
+    # --- 2. WIND SPEED LINE GRAPH ---
     fig_wind = go.Figure()
-    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['gust'], name="Gust", line=dict(color='rgba(255,255,255,0.15)', width=1), fill='tonexty', hoverinfo='skip'))
-    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['speed'], name="Speed", line=dict(color='white', width=2)))
+    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['gust'], fill='tonexty', fillcolor='rgba(255,255,255,0.05)', line=dict(width=0), name="Gust", hoverinfo='skip'))
+    fig_wind.add_trace(go.Scatter(x=df_hourly['time'], y=df_hourly['speed'], line=dict(color='white', width=2), name="Wind"))
+    add_night_shading(fig_wind)
     
     fig_wind.update_layout(
-        height=180, margin=dict(l=10, r=10, t=10, b=10), template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        showlegend=False,
+        height=200, margin=dict(l=10, r=10, t=5, b=5), template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
         xaxis=dict(showgrid=False, showticklabels=False, fixedrange=True),
-        yaxis=dict(title=dict(text="Knots", font=dict(size=10)), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
+        yaxis=dict(title="Knots", titlefont=dict(size=10), showgrid=True, gridcolor='rgba(255,255,255,0.05)', zeroline=False, fixedrange=True)
     )
     st.plotly_chart(fig_wind, use_container_width=True, config={'displayModeBar': False})
 
     # --- 3. TIDE GRAPH ---
     fig_tide = go.Figure()
-    fig_tide.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', line=dict(color='#00d4ff', width=2), hoverinfo='skip'))
+    fig_tide.add_trace(go.Scatter(x=df_tide['time'], y=df_tide['height'], fill='tozeroy', fillcolor='rgba(0, 212, 255, 0.2)', line=dict(color='#00d4ff', width=2), hoverinfo='skip'))
+    add_night_shading(fig_tide)
     
     fig_tide.update_layout(
-        height=120, margin=dict(l=10, r=10, t=5, b=20), template="plotly_dark",
+        height=140, margin=dict(l=10, r=10, t=5, b=20), template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(showgrid=False, dtick=86400000.0, tickformat="%a", tickfont=dict(size=9), fixedrange=True),
+        xaxis=dict(showgrid=False, tickformat="%a", dtick=86400000.0, tickfont=dict(size=9), fixedrange=True),
         yaxis=dict(visible=False, fixedrange=True)
     )
     st.plotly_chart(fig_tide, use_container_width=True, config={'displayModeBar': False})
 
 except Exception as e:
-    st.error(f"Layout Error: {e}")
+    st.error(f"Dashboard Error: {e}")
