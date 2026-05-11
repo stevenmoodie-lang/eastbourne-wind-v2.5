@@ -66,7 +66,6 @@ def get_weather_data():
 try:
     df_hourly, df_sun = get_weather_data()
 
-    # --- SEGMENT LOGIC ---
     segments = []
     for _, day in df_sun.iterrows():
         sunrise, sunset = day['sunrise'], day['sunset']
@@ -82,13 +81,10 @@ try:
                 segments.append({
                     "x_id": f"{day['date']}_{i}", 
                     "speed": d['speed'].mean(), 
-                    "dir": avg_dir,
-                    "day_label": day['date'].strftime('%a') if i == 1 else ""
+                    "dir": avg_dir
                 })
-        # Add a tiny gap between days
         segments.append({"x_id": f"{day['date']}_spacer", "spacer": True})
 
-    # --- THE CHART ---
     fig = go.Figure()
 
     for s in segments:
@@ -102,10 +98,7 @@ try:
             showlegend=False, hoverinfo='none'
         ))
 
-        # Arrow Heading (180 offset so it points TO)
         heading = (s['dir'] + 180) % 360
-        
-        # Position Arrow based on Northerly vs Southerly
         y_pos = 0.5 if (75 < s['dir'] < 105 or 255 < s['dir'] < 285) else (0.35 if 105 <= s['dir'] <= 255 else 0.75)
         
         fig.add_annotation(
@@ -131,7 +124,8 @@ try:
             tickvals=[f"{d}_1" for d in df_sun['date']], 
             ticktext=[f"<b>{d.strftime('%a')}</b>" for d in df_sun['date']], 
             side="top", 
-            tickfont=dict(size=12),
+            # FIXED: tickfont color set to white
+            tickfont=dict(size=12, color="white"),
             fixedrange=True
         ),
         yaxis=dict(visible=False, range=[-0.7, 1], fixedrange=True)
